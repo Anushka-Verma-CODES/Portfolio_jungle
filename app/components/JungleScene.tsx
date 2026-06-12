@@ -1,212 +1,150 @@
 "use client";
 
-import { Environment, PerspectiveCamera } from "@react-three/drei";
+import { Environment, PerspectiveCamera, useGLTF } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { Suspense, useMemo, useRef } from "react";
 import * as THREE from "three";
 
-type TreeSpec = {
-  position: [number, number, number];
-  height: number;
-  radius: number;
-  canopy: number;
-  lean: number;
+type VectorTuple = [number, number, number];
+
+type AssetInstance = {
+  src: string;
+  position: VectorTuple;
+  rotation?: VectorTuple;
+  scale?: number | VectorTuple;
 };
 
-type PlantSpec = {
-  position: [number, number, number];
-  scale: number;
-  rotation: number;
-  color: string;
-};
+const MODEL_PATHS = {
+  trunk: "/models/rainforest/rainforest-trunk.glb",
+  canopy: "/models/rainforest/canopy-cluster.glb",
+  fern: "/models/rainforest/fern.glb",
+  vines: "/models/rainforest/vines.glb",
+  undergrowth: "/models/rainforest/undergrowth.glb",
+  floor: "/models/rainforest/forest-floor.glb",
+} as const;
 
-const treeSpecs: TreeSpec[] = [
-  { position: [-5.4, 0, -2.4], height: 9.8, radius: 0.46, canopy: 2.3, lean: -0.12 },
-  { position: [4.7, 0, -2.1], height: 10.8, radius: 0.52, canopy: 2.6, lean: 0.08 },
-  { position: [-3.2, 0, -5.4], height: 8.2, radius: 0.32, canopy: 2.1, lean: 0.1 },
-  { position: [2.6, 0, -6.2], height: 9.4, radius: 0.36, canopy: 2.4, lean: -0.08 },
-  { position: [-6.8, 0, -8.2], height: 11.4, radius: 0.44, canopy: 3.0, lean: 0.05 },
-  { position: [6.4, 0, -8.8], height: 10.2, radius: 0.4, canopy: 2.8, lean: -0.05 },
-  { position: [-1.2, 0, -10.5], height: 7.6, radius: 0.25, canopy: 2.0, lean: 0.03 },
-  { position: [1.8, 0, -12.3], height: 8.6, radius: 0.3, canopy: 2.2, lean: -0.04 },
+const trunks: AssetInstance[] = [
+  { src: MODEL_PATHS.trunk, position: [-5.2, 0, -1.6], rotation: [0, -0.12, 0.03], scale: [1.25, 1.25, 1.25] },
+  { src: MODEL_PATHS.trunk, position: [4.8, 0, -2.2], rotation: [0, 0.2, -0.02], scale: [1.35, 1.42, 1.35] },
+  { src: MODEL_PATHS.trunk, position: [-3.4, 0, -5.2], rotation: [0, 0.55, 0.04], scale: [0.92, 1.06, 0.92] },
+  { src: MODEL_PATHS.trunk, position: [2.9, 0, -5.9], rotation: [0, -0.35, -0.04], scale: [1.0, 1.16, 1.0] },
+  { src: MODEL_PATHS.trunk, position: [-7.1, 0, -8.5], rotation: [0, -0.5, 0.01], scale: [1.25, 1.5, 1.25] },
+  { src: MODEL_PATHS.trunk, position: [6.7, 0, -8.9], rotation: [0, 0.35, -0.03], scale: [1.18, 1.36, 1.18] },
+  { src: MODEL_PATHS.trunk, position: [-1.2, 0, -11.2], rotation: [0, 0.14, 0.01], scale: [0.82, 1.0, 0.82] },
+  { src: MODEL_PATHS.trunk, position: [1.9, 0, -13.1], rotation: [0, -0.22, -0.02], scale: [0.9, 1.08, 0.9] },
 ];
 
-function seededNoise(index: number) {
-  return Math.sin(index * 12.9898) * 43758.5453 % 1;
-}
+const canopies: AssetInstance[] = [
+  { src: MODEL_PATHS.canopy, position: [-4.9, 6.0, -2.4], rotation: [0.12, 0.5, -0.1], scale: [2.0, 1.35, 1.6] },
+  { src: MODEL_PATHS.canopy, position: [4.5, 6.35, -3.0], rotation: [0.04, -0.7, 0.08], scale: [2.25, 1.45, 1.75] },
+  { src: MODEL_PATHS.canopy, position: [-1.2, 7.1, -6.5], rotation: [0.14, 0.15, 0.04], scale: [2.6, 1.55, 2.0] },
+  { src: MODEL_PATHS.canopy, position: [2.5, 6.8, -7.5], rotation: [0.08, -0.2, -0.05], scale: [2.2, 1.4, 1.8] },
+  { src: MODEL_PATHS.canopy, position: [-5.4, 6.65, -9.6], rotation: [0.08, -0.4, 0.02], scale: [2.3, 1.5, 1.9] },
+  { src: MODEL_PATHS.canopy, position: [5.6, 6.8, -10.1], rotation: [0.1, 0.35, -0.04], scale: [2.4, 1.48, 2.0] },
+];
+
+const groundVegetation: AssetInstance[] = [
+  { src: MODEL_PATHS.fern, position: [-2.8, 0, -1.4], rotation: [0, 0.5, 0], scale: 0.8 },
+  { src: MODEL_PATHS.fern, position: [2.4, 0, -1.9], rotation: [0, -0.35, 0], scale: 0.72 },
+  { src: MODEL_PATHS.fern, position: [-4.6, 0, -3.2], rotation: [0, 1.2, 0], scale: 1.15 },
+  { src: MODEL_PATHS.fern, position: [4.2, 0, -3.8], rotation: [0, -1.0, 0], scale: 1.1 },
+  { src: MODEL_PATHS.fern, position: [-2.0, 0, -5.3], rotation: [0, -0.75, 0], scale: 0.78 },
+  { src: MODEL_PATHS.fern, position: [1.9, 0, -6.0], rotation: [0, 0.85, 0], scale: 0.82 },
+  { src: MODEL_PATHS.undergrowth, position: [-3.8, 0, -2.4], rotation: [0, 0.1, 0], scale: 1.65 },
+  { src: MODEL_PATHS.undergrowth, position: [3.6, 0, -2.8], rotation: [0, -0.6, 0], scale: 1.55 },
+  { src: MODEL_PATHS.undergrowth, position: [-5.5, 0, -5.8], rotation: [0, 1.0, 0], scale: 2.0 },
+  { src: MODEL_PATHS.undergrowth, position: [5.1, 0, -6.4], rotation: [0, -1.2, 0], scale: 2.05 },
+  { src: MODEL_PATHS.undergrowth, position: [-1.8, 0, -8.8], rotation: [0, 0.4, 0], scale: 1.45 },
+  { src: MODEL_PATHS.undergrowth, position: [2.2, 0, -9.6], rotation: [0, -0.2, 0], scale: 1.55 },
+];
+
+const vines: AssetInstance[] = [
+  { src: MODEL_PATHS.vines, position: [-3.8, 3.2, -2.4], rotation: [0, 0.25, 0], scale: [1.0, 1.22, 1.0] },
+  { src: MODEL_PATHS.vines, position: [2.5, 3.5, -3.8], rotation: [0, -0.5, 0], scale: [0.95, 1.35, 0.95] },
+  { src: MODEL_PATHS.vines, position: [-1.1, 3.9, -6.4], rotation: [0, 0.85, 0], scale: [1.2, 1.45, 1.2] },
+  { src: MODEL_PATHS.vines, position: [5.1, 3.0, -8.2], rotation: [0, -0.65, 0], scale: [1.15, 1.4, 1.15] },
+];
+
+const allInstances: AssetInstance[] = [
+  { src: MODEL_PATHS.floor, position: [0, 0, -6.3], scale: [1.15, 1, 1.15] },
+  ...trunks,
+  ...canopies,
+  ...groundVegetation,
+  ...vines,
+];
 
 function CameraRig() {
   const camera = useRef<THREE.PerspectiveCamera>(null);
   const { pointer } = useThree();
+  const yaw = useRef(0);
 
-  useFrame(({ clock }, delta) => {
+  useFrame((_, delta) => {
     if (!camera.current) {
       return;
     }
 
-    const time = clock.getElapsedTime();
-    const nextX = THREE.MathUtils.damp(
-      camera.current.position.x,
-      pointer.x * 0.42,
-      3,
-      delta,
-    );
-    const nextY = THREE.MathUtils.damp(
-      camera.current.position.y,
-      1.82 + pointer.y * 0.18 + Math.sin(time * 0.35) * 0.025,
-      3,
-      delta,
-    );
-    camera.current.position.set(nextX, nextY, 7.1);
-    camera.current.lookAt(pointer.x * 0.28, 1.55 + pointer.y * 0.1, -5.8);
+    const maxYaw = THREE.MathUtils.degToRad(10);
+    const targetYaw = THREE.MathUtils.clamp(-pointer.x * maxYaw, -maxYaw, maxYaw);
+    yaw.current = THREE.MathUtils.damp(yaw.current, targetYaw, 4.2, delta);
+
+    camera.current.position.set(0, 1.68, 6.2);
+    camera.current.rotation.set(0, yaw.current, 0);
   });
 
   return (
     <PerspectiveCamera
       ref={camera}
       makeDefault
-      position={[0, 1.82, 7.1]}
-      fov={47}
+      position={[0, 1.68, 6.2]}
+      rotation={[0, 0, 0]}
+      fov={50}
       near={0.1}
-      far={45}
+      far={48}
     />
   );
 }
 
-function LeafCluster({
-  position,
-  scale,
-  color,
-}: {
-  position: [number, number, number];
-  scale: [number, number, number];
-  color: string;
-}) {
-  return (
-    <mesh castShadow receiveShadow position={position} scale={scale}>
-      <sphereGeometry args={[1, 24, 16]} />
-      <meshStandardMaterial color={color} roughness={0.95} metalness={0.02} />
-    </mesh>
-  );
-}
+function RainforestAsset({ src, position, rotation = [0, 0, 0], scale = 1 }: AssetInstance) {
+  const { scene } = useGLTF(src);
 
-function BroadLeaf({ color = "#2d7b45" }: { color?: string }) {
-  return (
-    <mesh castShadow receiveShadow>
-      <sphereGeometry args={[0.35, 18, 10]} />
-      <meshStandardMaterial color={color} roughness={0.9} side={THREE.DoubleSide} />
-    </mesh>
-  );
-}
-
-function JungleTree({ position, height, radius, canopy, lean }: TreeSpec) {
-  const trunkTop = height * 0.5;
-
-  return (
-    <group position={position} rotation={[0, 0, lean]}>
-      <mesh castShadow receiveShadow position={[0, height * 0.5, 0]}>
-        <cylinderGeometry args={[radius * 0.62, radius, height, 18, 8]} />
-        <meshStandardMaterial color="#5a3927" roughness={0.88} />
-      </mesh>
-
-      <mesh castShadow receiveShadow position={[radius * 0.34, height * 0.36, radius * 0.16]} rotation={[0.08, 0.2, 0.08]}>
-        <cylinderGeometry args={[radius * 0.08, radius * 0.14, height * 0.9, 10, 4]} />
-        <meshStandardMaterial color="#6b452f" roughness={0.9} />
-      </mesh>
-
-      <LeafCluster
-        position={[-0.48, trunkTop + 2.25, -0.2]}
-        scale={[canopy * 0.88, canopy * 0.48, canopy * 0.68]}
-        color="#174b32"
-      />
-      <LeafCluster
-        position={[0.55, trunkTop + 2.05, 0.16]}
-        scale={[canopy * 0.72, canopy * 0.44, canopy * 0.62]}
-        color="#236b3e"
-      />
-      <LeafCluster
-        position={[0.1, trunkTop + 2.75, -0.55]}
-        scale={[canopy * 0.75, canopy * 0.54, canopy * 0.72]}
-        color="#2f7d45"
-      />
-    </group>
-  );
-}
-
-function Fern({ position, scale, rotation, color }: PlantSpec) {
-  const leaves = [-0.72, -0.36, 0, 0.36, 0.72];
-
-  return (
-    <group position={position} rotation={[0, rotation, 0]} scale={scale}>
-      {leaves.map((x, index) => (
-        <group
-          key={x}
-          position={[x * 0.24, 0.32 + index * 0.025, 0]}
-          rotation={[0.35, 0, x * -0.7]}
-        >
-          <BroadLeaf color={color} />
-        </group>
-      ))}
-      <mesh castShadow position={[0, 0.18, 0]}>
-        <cylinderGeometry args={[0.025, 0.035, 0.5, 8]} />
-        <meshStandardMaterial color="#466b32" roughness={0.85} />
-      </mesh>
-    </group>
-  );
-}
-
-function GroundFoliage() {
-  const plants = useMemo<PlantSpec[]>(() => {
-    return Array.from({ length: 52 }, (_, index) => {
-      const side = index % 2 === 0 ? -1 : 1;
-      const depth = -1.4 - (index % 26) * 0.47;
-      const spread = 1.5 + Math.abs(depth) * 0.35;
-      const noise = seededNoise(index);
-
-      return {
-        position: [
-          side * (1.05 + spread * (0.42 + Math.abs(noise) * 0.6)),
-          0.04,
-          depth + seededNoise(index + 9) * 0.28,
-        ],
-        scale: 0.55 + Math.abs(seededNoise(index + 4)) * 0.8,
-        rotation: seededNoise(index + 12) * Math.PI,
-        color: index % 3 === 0 ? "#225d39" : index % 3 === 1 ? "#327948" : "#476f2f",
-      };
+  const model = useMemo(() => {
+    const clone = scene.clone(true);
+    clone.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+        child.frustumCulled = true;
+      }
     });
-  }, []);
+    return clone;
+  }, [scene]);
 
-  return (
-    <group>
-      {plants.map((plant, index) => (
-        <Fern key={`${plant.position.join("-")}-${index}`} {...plant} />
-      ))}
-    </group>
-  );
+  return <primitive object={model} position={position} rotation={rotation} scale={scale} />;
 }
 
-function LightRays() {
-  const rays = [
-    { position: [-2.5, 4.8, -3.8], rotation: [0.1, -0.35, -0.48], scale: [0.95, 6.8, 1] },
-    { position: [0.4, 4.55, -5.2], rotation: [0.08, -0.2, -0.34], scale: [0.72, 6.2, 1] },
-    { position: [2.8, 4.25, -6.5], rotation: [0.1, -0.1, -0.25], scale: [0.58, 5.7, 1] },
+function VolumetricSunlight() {
+  const shafts = [
+    { position: [-3.6, 4.4, -3.1], rotation: [0.06, -0.34, -0.54], scale: [1.15, 7.2, 1] },
+    { position: [-1.2, 4.2, -5.3], rotation: [0.08, -0.24, -0.42], scale: [0.8, 6.5, 1] },
+    { position: [1.6, 4.0, -6.6], rotation: [0.08, -0.16, -0.34], scale: [0.72, 6.2, 1] },
+    { position: [4.0, 3.8, -8.4], rotation: [0.08, -0.1, -0.24], scale: [0.58, 5.6, 1] },
   ] as const;
 
   return (
     <group>
-      {rays.map((ray, index) => (
+      {shafts.map((shaft, index) => (
         <mesh
           key={index}
-          position={ray.position}
-          rotation={ray.rotation}
-          scale={ray.scale}
+          position={shaft.position}
+          rotation={shaft.rotation}
+          scale={shaft.scale}
           renderOrder={1}
         >
           <planeGeometry args={[1, 1]} />
           <meshBasicMaterial
-            color="#ffe7a7"
+            color="#ffe8ad"
             transparent
-            opacity={0.13}
+            opacity={0.12}
             depthWrite={false}
             blending={THREE.AdditiveBlending}
             side={THREE.DoubleSide}
@@ -217,38 +155,13 @@ function LightRays() {
   );
 }
 
-function JungleEnvironment() {
-  const canopy = useRef<THREE.Group>(null);
-
-  useFrame(({ clock }) => {
-    if (!canopy.current) {
-      return;
-    }
-
-    canopy.current.rotation.z = Math.sin(clock.getElapsedTime() * 0.18) * 0.012;
-  });
-
+function RainforestEnvironment() {
   return (
     <group>
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, -5.6]}>
-        <planeGeometry args={[22, 30, 32, 32]} />
-        <meshStandardMaterial color="#1f3427" roughness={1} />
-      </mesh>
-
-      {treeSpecs.map((tree) => (
-        <JungleTree key={tree.position.join("-")} {...tree} />
+      {allInstances.map((instance, index) => (
+        <RainforestAsset key={`${instance.src}-${index}`} {...instance} />
       ))}
-
-      <group ref={canopy}>
-        <LeafCluster position={[-3.8, 7.0, -4.2]} scale={[3.1, 1.15, 1.7]} color="#123c2a" />
-        <LeafCluster position={[3.8, 7.3, -4.6]} scale={[3.4, 1.2, 1.85]} color="#174a31" />
-        <LeafCluster position={[0.1, 7.9, -7.2]} scale={[4.6, 1.55, 2.25]} color="#1d5b35" />
-        <LeafCluster position={[-4.6, 6.7, -9.2]} scale={[3.7, 1.35, 2.0]} color="#113624" />
-        <LeafCluster position={[4.8, 6.95, -9.6]} scale={[3.9, 1.3, 2.1]} color="#1d5534" />
-      </group>
-
-      <GroundFoliage />
-      <LightRays />
+      <VolumetricSunlight />
     </group>
   );
 }
@@ -259,28 +172,39 @@ export default function JungleScene() {
       <Canvas
         shadows
         dpr={[1, 1.75]}
-        gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
+        gl={{
+          antialias: true,
+          alpha: false,
+          powerPreference: "high-performance",
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.05,
+        }}
       >
-        <color attach="background" args={["#102219"]} />
-        <fog attach="fog" args={["#627561", 6.2, 22]} />
-        <ambientLight intensity={0.32} color="#6a8b73" />
-        <hemisphereLight args={["#a7c8a3", "#18251b", 1.6]} />
+        <color attach="background" args={["#07120d"]} />
+        <fog attach="fog" args={["#4d6451", 5.4, 24]} />
+        <ambientLight intensity={0.22} color="#4f725b" />
+        <hemisphereLight args={["#9fc29a", "#172315", 1.15]} />
         <directionalLight
           castShadow
-          color="#ffe0a0"
-          intensity={3.2}
-          position={[-4.6, 8.8, 3.6]}
-          shadow-camera-far={32}
-          shadow-camera-left={-10}
-          shadow-camera-right={10}
-          shadow-camera-top={10}
-          shadow-camera-bottom={-10}
+          color="#ffd38c"
+          intensity={4.6}
+          position={[-5.2, 8.8, 3.4]}
+          shadow-camera-far={35}
+          shadow-camera-left={-12}
+          shadow-camera-right={12}
+          shadow-camera-top={12}
+          shadow-camera-bottom={-12}
+          shadow-bias={-0.0001}
           shadow-mapSize={[2048, 2048]}
         />
         <CameraRig />
-        <JungleEnvironment />
-        <Environment preset="forest" environmentIntensity={0.18} />
+        <Suspense fallback={null}>
+          <RainforestEnvironment />
+          <Environment preset="forest" environmentIntensity={0.12} />
+        </Suspense>
       </Canvas>
     </div>
   );
 }
+
+Object.values(MODEL_PATHS).forEach((path) => useGLTF.preload(path));
