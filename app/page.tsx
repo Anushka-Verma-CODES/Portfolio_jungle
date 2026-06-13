@@ -16,17 +16,13 @@ export default function Home() {
 
         <nav className="relative z-10 flex items-center justify-between text-sm font-medium">
           <a href="#" className="tracking-[0.18em] text-[#f7f1df] uppercase">
-            Anushka
           </a>
           <div className="hidden items-center gap-8 text-[#d9dfc8] sm:flex">
             <a href="#work" className="transition hover:text-white">
-              Work
             </a>
             <a href="#studio" className="transition hover:text-white">
-              Studio
             </a>
             <a href="mailto:hello@example.com" className="transition hover:text-white">
-              Contact
             </a>
           </div>
         </nav>
@@ -34,29 +30,14 @@ export default function Home() {
         <div className="relative z-10 grid min-h-[calc(100vh-6rem)] items-center gap-12 pt-12 lg:grid-cols-[minmax(0,0.82fr)_minmax(320px,1.18fr)] lg:pt-0">
           <div className="max-w-3xl">
             <p className="mb-5 max-w-max border-l-2 border-[#f2b66d] pl-4 text-sm font-semibold uppercase tracking-[0.22em] text-[#d6e1b8]">
-              Interactive web portfolio
             </p>
             <h1 className="max-w-4xl text-balance text-5xl font-semibold leading-[0.95] text-[#fff8df] drop-shadow-[0_8px_34px_rgba(0,0,0,0.72)] sm:text-7xl lg:text-8xl">
-              Building calm interfaces with cinematic depth.
+              ANUSHKA VERMA
             </h1>
             <p className="mt-7 max-w-2xl text-lg leading-8 text-[#d7dfc8] drop-shadow-[0_5px_20px_rgba(0,0,0,0.72)] sm:text-xl">
-              I design and ship polished digital products where frontend
-              systems, motion, and spatial storytelling work together.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <a
-                href="#work"
-                className="inline-flex h-12 items-center justify-center rounded-full bg-[#fff3c4] px-6 text-sm font-semibold text-[#102219] shadow-[0_14px_38px_rgba(0,0,0,0.32)] transition hover:bg-white"
-              >
-                View selected work
-              </a>
-              <a
-                href="mailto:hello@example.com"
-                className="inline-flex h-12 items-center justify-center rounded-full border border-white/35 px-6 text-sm font-semibold text-[#fff8df] backdrop-blur-sm transition hover:border-white/60 hover:bg-white/10"
-              >
-                Start a project
-              </a>
             </div>
           </div>
 

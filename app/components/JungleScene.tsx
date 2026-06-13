@@ -160,6 +160,72 @@ function RainforestAsset({ src, position, rotation = [0, 0, 0], scale = 1 }: Ass
   );
 }
 
+
+// function ForestRanger() {
+//   const { scene } = useGLTF("/models/rainforest/forest_ranger.glb");
+
+//   const model = useMemo(() => {
+//     const clone = scene.clone(true);
+//     clone.traverse((child) => {
+//       if (child instanceof THREE.Mesh) {
+//         child.castShadow = true;
+//         child.receiveShadow = true;
+//         if (child.material instanceof THREE.Material) {
+//           (child.material as any).envMapIntensity = 0.6;
+//         }
+//       }
+//     });
+//     return clone;
+//   }, [scene]);
+
+//   return (
+//     <>
+//       {/* DEAD CENTER TEST — z=0 is between camera(6.2) and scene(-6) */}
+//       <mesh position={[0, 1.5, 0]}>
+//         <boxGeometry args={[1, 3, 1]} />
+//         <meshBasicMaterial color="red" depthTest={false} />
+//       </mesh>
+
+//       {/* Ranger offset right */}
+//       <group position={[2.2, 0, 0]}>
+//         <primitive object={model} rotation={[0, Math.PI, 0]} scale={1.795} />
+//       </group>
+//     </>
+//   );
+// }
+
+function ForestRanger() {
+  const { scene } = useGLTF("/models/rainforest/forest_ranger.glb");
+  const groupRef = useRef<THREE.Group>(null);
+
+  const model = useMemo(() => {
+    const clone = scene.clone(true);
+    clone.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+        if (child.material instanceof THREE.Material) {
+          (child.material as any).envMapIntensity = 0.6;
+        }
+      }
+    });
+    return clone;
+  }, [scene]);
+
+  // Subtle idle: gentle bob + slight sway
+  useFrame(({ clock }) => {
+    if (!groupRef.current) return;
+    const t = clock.getElapsedTime();
+    groupRef.current.position.y = 0.44 + Math.sin(t * 1.2) * 0.04;
+    groupRef.current.rotation.y = Math.PI + 0.3 + Math.sin(t * 0.6) * 0.5;
+  });
+
+  return (
+    <group ref={groupRef} position={[1.8 , 0, 2.5]}>
+      <primitive object={model} scale={2.4} />
+    </group>
+  );
+} 
 function VolumetricSunlight() {
   const groupRef = useRef<THREE.Group>(null);
   const { pointer } = useThree();
@@ -207,8 +273,7 @@ function RainforestEnvironment() {
     <group>
       {allInstances.map((instance, index) => (
         <RainforestAsset key={`${instance.src}-${index}`} {...instance} />
-      ))}
-      <VolumetricSunlight />
+      ))}<ForestRanger /><VolumetricSunlight />
     </group>
   );
 }
@@ -271,3 +336,4 @@ export default function JungleScene() {
 }
 
 Object.values(MODEL_PATHS).forEach((path) => useGLTF.preload(path));
+useGLTF.preload("/models/rainforest/forest_ranger.glb");
