@@ -135,8 +135,6 @@ function CameraRig() {
 
 function RainforestAsset({ src, position, rotation = [0, 0, 0], scale = 1 }: AssetInstance) {
   const { scene } = useGLTF(src);
-  const groupRef = useRef<THREE.Group>(null);
-  const { pointer } = useThree();
 
   const model = useMemo(() => {
     const clone = scene.clone(true);
@@ -145,7 +143,7 @@ function RainforestAsset({ src, position, rotation = [0, 0, 0], scale = 1 }: Ass
         child.castShadow = true;
         child.receiveShadow = true;
         child.frustumCulled = true;
-        
+
         // Improve materials for better realism
         if (child.material instanceof THREE.Material) {
           (child.material as any).envMapIntensity = 0.6;
@@ -155,22 +153,8 @@ function RainforestAsset({ src, position, rotation = [0, 0, 0], scale = 1 }: Ass
     return clone;
   }, [scene]);
 
-  // Calculate depth-based parallax factor (closer objects move more)
-  const depthFactor = Math.max(0.2, 1 - position[2] / 15);
-
-  useFrame(() => {
-    if (!groupRef.current) return;
-
-    // Apply parallax offset based on depth and mouse position
-    const parallaxX = pointer.x * depthFactor * 1.2;
-    const parallaxY = -pointer.y * depthFactor * 0.8;
-
-    groupRef.current.position.x = position[0] + parallaxX;
-    groupRef.current.position.y = position[1] + parallaxY;
-  });
-
   return (
-    <group ref={groupRef} position={[position[0], position[1], position[2]]}>
+    <group position={position}>
       <primitive object={model} rotation={rotation} scale={scale} />
     </group>
   );
