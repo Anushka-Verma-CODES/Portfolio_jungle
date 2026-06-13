@@ -75,20 +75,49 @@ const allInstances: AssetInstance[] = [
 
 function CameraRig() {
   const camera = useRef<THREE.PerspectiveCamera>(null);
-  const { pointer } = useThree();
+  const { pointer, viewport } = useThree();
   const yaw = useRef(0);
+  const pitch = useRef(0);
+  const targetPositionX = useRef(0);
+  const targetPositionY = useRef(0);
 
   useFrame((_, delta) => {
     if (!camera.current) {
       return;
     }
 
-    const maxYaw = THREE.MathUtils.degToRad(10);
-    const targetYaw = THREE.MathUtils.clamp(-pointer.x * maxYaw, -maxYaw, maxYaw);
-    yaw.current = THREE.MathUtils.damp(yaw.current, targetYaw, 4.2, delta);
+    // Enhanced parallax with smooth mouse tracking
+    const maxYaw = THREE.MathUtils.degToRad(12);
+    const maxPitch = THREE.MathUtils.degToRad(6);
+    const maxPositionX = 0.8;
+    const maxPositionY = 0.6;
 
-    camera.current.position.set(0, 1.68, 6.2);
-    camera.current.rotation.set(0, yaw.current, 0);
+    // Mouse-based parallax (both rotation and position shift)
+    const targetYaw = THREE.MathUtils.clamp(-pointer.x * maxYaw, -maxYaw, maxYaw);
+    const targetPitch = THREE.MathUtils.clamp(pointer.y * maxPitch, -maxPitch, maxPitch);
+    targetPositionX.current = pointer.x * maxPositionX;
+    targetPositionY.current = -pointer.y * maxPositionY;
+
+    // Smooth damping for more natural movement
+    yaw.current = THREE.MathUtils.damp(yaw.current, targetYaw, 3.8, delta);
+    pitch.current = THREE.MathUtils.damp(pitch.current, targetPitch, 3.8, delta);
+
+    const posX = THREE.MathUtils.damp(
+      camera.current.position.x,
+      targetPositionX.current,
+      3.5,
+      delta
+    );
+    const posY = THREE.MathUtils.damp(
+      camera.current.position.y,
+      1.68 + targetPositionY.current,
+      3.5,
+      delta
+    );
+
+    camera.current.position.set(posX, posY, 6.2);
+    camera.current.rotation.order = "YXZ";
+    camera.current.rotation.set(pitch.current, yaw.current, 0);
   });
 
   return (
@@ -106,6 +135,8 @@ function CameraRig() {
 
 function RainforestAsset({ src, position, rotation = [0, 0, 0], scale = 1 }: AssetInstance) {
   const { scene } = useGLTF(src);
+  const groupRef = useRef<THREE.Group>(null);
+  const { pointer } = useThree();
 
   const model = useMemo(() => {
     const clone = scene.clone(true);
@@ -114,15 +145,41 @@ function RainforestAsset({ src, position, rotation = [0, 0, 0], scale = 1 }: Ass
         child.castShadow = true;
         child.receiveShadow = true;
         child.frustumCulled = true;
+        
+        // Improve materials for better realism
+        if (child.material instanceof THREE.Material) {
+          (child.material as any).envMapIntensity = 0.6;
+        }
       }
     });
     return clone;
   }, [scene]);
 
-  return <primitive object={model} position={position} rotation={rotation} scale={scale} />;
+  // Calculate depth-based parallax factor (closer objects move more)
+  const depthFactor = Math.max(0.2, 1 - position[2] / 15);
+
+  useFrame(() => {
+    if (!groupRef.current) return;
+
+    // Apply parallax offset based on depth and mouse position
+    const parallaxX = pointer.x * depthFactor * 1.2;
+    const parallaxY = -pointer.y * depthFactor * 0.8;
+
+    groupRef.current.position.x = position[0] + parallaxX;
+    groupRef.current.position.y = position[1] + parallaxY;
+  });
+
+  return (
+    <group ref={groupRef} position={[position[0], position[1], position[2]]}>
+      <primitive object={model} rotation={rotation} scale={scale} />
+    </group>
+  );
 }
 
 function VolumetricSunlight() {
+  const groupRef = useRef<THREE.Group>(null);
+  const { pointer } = useThree();
+
   const shafts = [
     { position: [-3.6, 4.4, -3.1], rotation: [0.06, -0.34, -0.54], scale: [1.15, 7.2, 1] },
     { position: [-1.2, 4.2, -5.3], rotation: [0.08, -0.24, -0.42], scale: [0.8, 6.5, 1] },
@@ -130,8 +187,14 @@ function VolumetricSunlight() {
     { position: [4.0, 3.8, -8.4], rotation: [0.08, -0.1, -0.24], scale: [0.58, 5.6, 1] },
   ] as const;
 
+  useFrame(() => {
+    if (!groupRef.current) return;
+    // Subtle responsive rotation to light shafts
+    groupRef.current.rotation.y = pointer.x * 0.2;
+  });
+
   return (
-    <group>
+    <group ref={groupRef}>
       {shafts.map((shaft, index) => (
         <mesh
           key={index}
@@ -144,7 +207,7 @@ function VolumetricSunlight() {
           <meshBasicMaterial
             color="#ffe8ad"
             transparent
-            opacity={0.12}
+            opacity={0.14}
             depthWrite={false}
             blending={THREE.AdditiveBlending}
             side={THREE.DoubleSide}
@@ -177,30 +240,46 @@ export default function JungleScene() {
           alpha: false,
           powerPreference: "high-performance",
           toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.05,
+          toneMappingExposure: 1.08,
         }}
       >
         <color attach="background" args={["#07120d"]} />
-        <fog attach="fog" args={["#4d6451", 5.4, 24]} />
-        <ambientLight intensity={0.22} color="#4f725b" />
-        <hemisphereLight args={["#9fc29a", "#172315", 1.15]} />
+        <fog attach="fog" args={["#4d6451", 4.8, 26]} />
+        
+        {/* Ambient & Environmental Lighting */}
+        <ambientLight intensity={0.26} color="#5a7d66" />
+        <hemisphereLight args={["#a8d5a0", "#0f1f18", 1.25]} />
+        
+        {/* Main Directional Light */}
         <directionalLight
           castShadow
           color="#ffd38c"
-          intensity={4.6}
-          position={[-5.2, 8.8, 3.4]}
-          shadow-camera-far={35}
-          shadow-camera-left={-12}
-          shadow-camera-right={12}
-          shadow-camera-top={12}
-          shadow-camera-bottom={-12}
-          shadow-bias={-0.0001}
+          intensity={4.8}
+          position={[-5.2, 9.2, 3.8]}
+          shadow-camera-far={38}
+          shadow-camera-left={-14}
+          shadow-camera-right={14}
+          shadow-camera-top={14}
+          shadow-camera-bottom={-14}
+          shadow-bias={-0.0002}
           shadow-mapSize={[2048, 2048]}
         />
+        
+        {/* Secondary Fill Light for depth */}
+        <pointLight
+          color="#7fb378"
+          intensity={0.8}
+          position={[6, 5, 4]}
+          distance={20}
+          decay={2}
+        />
+        
+        {/* Camera with Enhanced Parallax */}
         <CameraRig />
+        
         <Suspense fallback={null}>
           <RainforestEnvironment />
-          <Environment preset="forest" environmentIntensity={0.12} />
+          <Environment preset="forest" environmentIntensity={0.15} />
         </Suspense>
       </Canvas>
     </div>
